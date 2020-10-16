@@ -14,12 +14,12 @@ go get "github.com/AbdurrahmanA/svn-scanner"
 	Options:
 	  -h --help     Show this screen.
 	  --version     Show version.
-	  --ip     	    IP with subnetmask.
+	  --ip     	        IP with subnetmask.
 	  --ports     	Ports to scan.
 	  --timeout 	Scanner timeout for ip [default: 1000 ].
-	  --wcdb 	    Check .svn/wc.db [default: true].
+	  --wcdb 	        Check .svn/wc.db [default: true].
 	  --entries 	Check .svn/entries [default: false].
-	  --ssl 	    Check https version [default: false].
+	  --ssl 	        Check https version [default: false].
 	  --verbose 	You will see all result not just http code 200 [default: false].
 	 
 ```bash
