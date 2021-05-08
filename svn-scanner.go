@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,11 +31,13 @@ type Scanner struct {
 	entries bool
 	ssl     bool
 	verbose bool
+	thread  int
 }
 
 var err = false
 var empyt []byte
 var ips []string
+var count = 0
 
 func init() {
 	c := make(chan os.Signal)
@@ -48,7 +53,7 @@ func main() {
 
 	usage := `
 	Usage:
-	svn-scanner.go --ip <ip> --ports <ports>... [--timeout <timeout> ] [--wcdb <wcdb> ] [--entries <entries> ] [--ssl <ssl>] [--verbose  <verbose>]
+	svn-scanner.go --ip <ip> --ports <ports>... [--timeout <timeout> ] [--wcdb <wcdb> ] [--entries <entries> ] [--ssl <ssl>] [--verbose <verbose>] 
 	svn-scanner.go -h | --help
 	svn-scanner.go --version
 	
@@ -68,6 +73,7 @@ func main() {
 		entries: false,
 		ssl:     false,
 		verbose: false,
+		thread:  runtime.NumCPU(),
 		RTime:   1000,
 	}
 	arguments, _ := docopt.Parse(usage, nil, true, "svn-scanner 1.0", false)
@@ -83,15 +89,15 @@ func main() {
 
 		maxTime := time.Duration(0)
 		if scan.wcdb == true && scan.entries == true {
-			maxTime = time.Duration((sub.GetNumberAddressableHosts()*len(scan.Ports)*scan.RTime)*2) * time.Millisecond
+			maxTime = time.Duration(((sub.GetNumberAddressableHosts()*len(scan.Ports)*scan.RTime)*2)/scan.thread) * time.Millisecond
 		} else {
-			maxTime = time.Duration((sub.GetNumberAddressableHosts() * len(scan.Ports) * scan.RTime)) * time.Millisecond
+			maxTime = time.Duration((sub.GetNumberAddressableHosts()*len(scan.Ports)*scan.RTime)/scan.thread) * time.Millisecond
 		}
 
 		color.Info.Prompt("IP Range => %s", sub.GetIPAddressRange())
 		color.Info.Prompt("Network Size => %d", sub.GetNetworkSize())
 		color.Info.Prompt("%d IP's will be scan", sub.GetNumberAddressableHosts())
-		color.Info.Println("It will last", maxTime)
+		color.Info.Prompt("Will take an average of %s", maxTime)
 
 		Scan(scan)
 	}
@@ -105,79 +111,74 @@ func Scan(scan *Scanner) {
 		log.Fatal(err)
 	}
 	color.Info.Prompt("Scanner Start")
-
-	count := 0
-	for i := 0; i < len(tmp); i++ {
-		for j := 0; j < len(scan.Ports); j++ {
-			if scan.wcdb == true {
-				if scan.ssl == true {
-					StatusCode, _, err := fasthttp.GetTimeout(empyt, "https://"+tmp[i]+":"+scan.Ports[j]+"/.svn/wc.db", time.Duration(scan.RTime)*time.Millisecond)
-					if err == nil {
-						if scan.verbose == true {
-							count++
-							s := strconv.Itoa(StatusCode)
-							ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-						} else {
-							if StatusCode == 200 {
-								count++
-								s := strconv.Itoa(StatusCode)
-								ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-							}
-						}
-					}
-				}
-				StatusCode, _, err := fasthttp.GetTimeout(empyt, "http://"+tmp[i]+":"+scan.Ports[j]+"/.svn/wc.db", time.Duration(scan.RTime)*time.Millisecond)
-				if err == nil {
-					if scan.verbose == true {
-						count++
-						s := strconv.Itoa(StatusCode)
-						ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-					} else {
-						if StatusCode == 200 {
-							count++
-							s := strconv.Itoa(StatusCode)
-							ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-						}
-					}
-				}
+	start := time.Now()
+	countOfIPs := len(tmp)
+	countOfIPsBlocks := int(math.Ceil(float64(countOfIPs) / float64(scan.thread)))
+	var wg sync.WaitGroup
+	for i, k, j := 0, 0, 0; i < scan.thread; i++ {
+		if i < scan.thread {
+			j += countOfIPsBlocks
+			if j > countOfIPs {
+				j = k + (countOfIPs - k)
 			}
-			if scan.entries == true {
-				if scan.ssl == true {
-					StatusCode, _, err := fasthttp.GetTimeout(empyt, "https://"+tmp[i]+":"+scan.Ports[j]+"/.svn/entries", time.Duration(scan.RTime)*time.Millisecond)
-					if err == nil {
-						if scan.verbose == true {
-							count++
-							s := strconv.Itoa(StatusCode)
-							ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-						} else {
-							if StatusCode == 200 {
-								count++
-								s := strconv.Itoa(StatusCode)
-								ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-							}
-						}
-					}
-				}
-				StatusCode, _, err := fasthttp.GetTimeout(empyt, "http://"+tmp[i]+":"+scan.Ports[j]+"/.svn/entries", time.Duration(scan.RTime)*time.Millisecond)
-				if err == nil {
-					if scan.verbose == true {
-						count++
-						s := strconv.Itoa(StatusCode)
-						ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-					} else {
-						if StatusCode == 200 {
-							count++
-							s := strconv.Itoa(StatusCode)
-							ips = append(ips, tmp[i]+":"+scan.Ports[j]+" -> "+s)
-						}
-					}
-				}
-			}
-			fmt.Printf("\rCount -> %d -> %s -> %d ", i, tmp[i]+":"+scan.Ports[j], count)
+		}
+		IPsBlock := tmp[k:j]
+		wg.Add(1)
+		go syncGroup(&wg, i*countOfIPsBlocks, IPsBlock, scan)
+		time.Sleep(time.Second)
+		k += countOfIPsBlocks
+		if j == countOfIPs {
+			break
 		}
 	}
+	wg.Wait()
 	writeLines(ips, "output.txt")
+	elapsedTime := time.Since(start)
+	fmt.Println()
+	color.Info.Prompt("Total Time For Execution: %s", elapsedTime.String())
 
+}
+
+func syncGroup(wg *sync.WaitGroup, rank int, tmp []string, scan *Scanner) {
+	defer wg.Done()
+	path := ""
+	for i, k := 0, rank; i < len(tmp); i++ {
+		for j := 0; j < len(scan.Ports); j++ {
+			if scan.wcdb == true {
+				path = ".svn/wc.db"
+				makeRequest(tmp[i], path, scan.Ports[j], scan.RTime, scan.ssl, scan.verbose)
+				fmt.Printf("\rCount -> %d -> %s -> %d", k+i, tmp[i]+":"+scan.Ports[j]+"/"+path, count)
+			}
+			if scan.entries == true {
+				path = ".svn/entries"
+				makeRequest(tmp[i], path, scan.Ports[j], scan.RTime, scan.ssl, scan.verbose)
+				fmt.Printf("\rCount -> %d -> %s -> %d", k+i, tmp[i]+":"+scan.Ports[j]+"/"+path, count)
+			}
+		}
+	}
+}
+func makeRequest(url string, path string, port string, RTime int, ssl bool, verbose bool) {
+	protocol := ""
+	if ssl == true {
+		protocol = "https://"
+	}
+	protocol = "http://"
+
+	StatusCode, _, err := fasthttp.GetTimeout(empyt, protocol+url+":"+port+"/"+path, time.Duration(RTime)*time.Millisecond)
+	if err == nil {
+		if verbose == true {
+			count++
+			s := strconv.Itoa(StatusCode)
+			ips = append(ips, url+":"+port+"/"+path+" -> "+s)
+		} else {
+			if StatusCode == 200 {
+				count++
+				s := strconv.Itoa(StatusCode)
+				ips = append(ips, url+":"+port+"/"+path+" -> "+s)
+
+			}
+		}
+	}
 }
 
 var ports interface{}
