@@ -53,7 +53,7 @@ func main() {
 
 	usage := `
 	Usage:
-	svn-scanner.go --ip <ip> --ports <ports>... [--timeout <timeout> ] [--wcdb <wcdb> ] [--entries <entries> ] [--ssl <ssl>] [--verbose <verbose>] 
+	svn-scanner.go --ip <ip> --ports <ports>... [--threads <thread>] [--timeout <timeout> ] [--wcdb <wcdb> ] [--entries <entries> ] [--ssl <ssl>] [--verbose <verbose>] 
 	svn-scanner.go -h | --help
 	svn-scanner.go --version
 	
@@ -61,6 +61,7 @@ func main() {
 	  -h --help     Show this screen.
 	  --version     Show version.
 	  --ip     	IP with subnetmask.
+	  --threads 	How many threads will be used [default: Actual processor count ]
 	  --ports     	Ports to scan.
 	  --timeout 	Scanner timeout for ip [default: 1000 ].
 	  --wcdb 	Check .svn/wc.db [default: true].
@@ -78,6 +79,7 @@ func main() {
 	}
 	arguments, _ := docopt.Parse(usage, nil, true, "svn-scanner 1.0", false)
 	err = scan.argumentsControl(arguments)
+
 	if err == false {
 		ips := strings.Split(scan.IP, "/")
 		mask, _ := strconv.Atoi(ips[1])
@@ -115,6 +117,7 @@ func Scan(scan *Scanner) {
 	countOfIPs := len(tmp)
 	countOfIPsBlocks := int(math.Ceil(float64(countOfIPs) / float64(scan.thread)))
 	var wg sync.WaitGroup
+	wg.Add(scan.thread)
 	for i, k, j := 0, 0, 0; i < scan.thread; i++ {
 		if i < scan.thread {
 			j += countOfIPsBlocks
@@ -123,7 +126,6 @@ func Scan(scan *Scanner) {
 			}
 		}
 		IPsBlock := tmp[k:j]
-		wg.Add(1)
 		go syncGroup(&wg, i*countOfIPsBlocks, IPsBlock, scan)
 		time.Sleep(time.Second)
 		k += countOfIPsBlocks
@@ -159,11 +161,16 @@ func syncGroup(wg *sync.WaitGroup, rank int, tmp []string, scan *Scanner) {
 }
 func makeRequest(url string, path string, port string, RTime int, ssl bool, verbose bool) {
 	protocol := ""
+
+	if port == "443"{
+		protocol = "https://"
+	} else{
+		protocol = "http://"
+	}
 	if ssl == true {
 		protocol = "https://"
 	}
-	protocol = "http://"
-
+	
 	StatusCode, _, err := fasthttp.GetTimeout(empyt, protocol+url+":"+port+"/"+path, time.Duration(RTime)*time.Millisecond)
 	if err == nil {
 		if verbose == true {
@@ -276,10 +283,20 @@ func (scan *Scanner) argumentsControl(arguments map[string]interface{}) bool {
 		}
 	}
 
+	if arguments["--threads"] != nil {
+		var threads interface{}
+		threads = arguments["--threads"]
+		threadsNumber, _ := threads.(string)
+		if isNumeric(threadsNumber) {
+			scan.thread, _ = strconv.Atoi(threadsNumber)
+		}
+	}
+
 	if scan.entries == false && scan.wcdb == false {
 		color.Warn.Prompt("--entries and --wcdb can't be false at same time")
 		return true
 	}
+
 	return false
 
 }
@@ -327,4 +344,9 @@ func writeLines(lines []string, path string) error {
 		fmt.Fprintln(w, line)
 	}
 	return w.Flush()
+}
+
+func isNumeric(s string) bool {
+    _, err := strconv.ParseFloat(s, 64)
+    return err == nil
 }
