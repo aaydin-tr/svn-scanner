@@ -6,7 +6,7 @@ Svn-Scanner is a Golang tool that scans for .svn vulnerabilities. Svn-Scanner of
 Using Svn-Scanner is easy. First, use go get to install the latest version of the tool.
 
 ```bash
-mdkir svn-scanner
+mkdir svn-scanner
 cd svn-scanner
 go get "github.com/AbdurrahmanA/svn-scanner"
 go build
