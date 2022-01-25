@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -39,7 +38,7 @@ var scan = &Scanner{
 	entries: false,
 	ssl:     false,
 	verbose: false,
-	thread:  runtime.NumCPU(),
+	thread:  12,
 	RTime:   10,
 }
 
@@ -67,7 +66,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&scan.entries, "entries", false, "Check .svn/entries")
 	rootCmd.PersistentFlags().BoolVar(&scan.ssl, "ssl", false, "Check https version")
 	rootCmd.PersistentFlags().BoolVar(&scan.verbose, "verbose", false, "You will see all result not just http code 200")
-	rootCmd.PersistentFlags().IntVar(&scan.thread, "threads", runtime.NumCPU(), "How many threads will be used")
+	rootCmd.PersistentFlags().IntVar(&scan.thread, "threads", 12, "How many threads will be used")
 
 	rootCmd.MarkPersistentFlagRequired("ip")
 	rootCmd.MarkPersistentFlagRequired("ports")
