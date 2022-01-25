@@ -16,7 +16,6 @@ go get "github.com/AbdurrahmanA/svn-scanner"
 	  --version     Show version.
 	  --ip     	IP with subnetmask.
 	  --ports     	Ports to scan.
-	  --threads 	How many threads will be used [default: Actual processor count ]
 	  --timeout 	Scanner timeout for ip [default: 1000 ].
 	  --wcdb 	Check .svn/wc.db [default: true].
 	  --entries 	Check .svn/entries [default: false].
