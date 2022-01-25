@@ -3,14 +3,12 @@
 Svn-Scanner is a Golang tool that scans for .svn vulnerabilities. Svn-Scanner offers you the opportunity to scan through the ip range and different ports.
 ## Installation
 
-Using Svn-Scanner is easy. First, use go get to install the latest version of the tool.
+Using Svn-Scanner is easy. First, use `go install` to install the latest version of the tool.
 
 ```bash
-mkdir svn-scanner
-cd svn-scanner
-go get "github.com/AbdurrahmanA/svn-scanner"
-go build
-./svn-scanner scan --ip 192.168.1.1/24 --ports 80,443
+go install github.com/AbdurrahmanA/svn-scanner@latest
+mv $GOPATH/bin/svn-scanner /usr/bin/
+svn-scanner scan --ip 192.168.1.1/24 --ports 80,443
 ```
 
 ## Usage
