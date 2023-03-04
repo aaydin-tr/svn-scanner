@@ -1,4 +1,4 @@
-module github.com/AbdurrahmanA/svn-scanner
+module github.com/aaydin-tr/svn-scanner
 
 go 1.17
 
